@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Simple Message Board (Front End)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 12px; color: #222; }
+    h1 { text-align: center; }
+    form { display: flex; gap: 8px; margin-bottom: 12px; }
+    input[type="text"] { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    button { padding: 8px 12px; border-radius: 4px; border: none; background: #2b7cff; color: white; cursor: pointer; }
+    button.secondary { background: #777; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { border: 1px solid #eee; padding: 10px; margin-bottom: 8px; border-radius: 6px; display:flex; justify-content:space-between; align-items:center;}
+    .meta { color: #666; font-size: 0.9rem; margin-top: 6px;}
+    .left { max-width: 82%; }
+    .msg-text { margin: 6px 0 0 0; }
+    .controls { display:flex; gap:6px; }
+    .small { font-size: 0.85rem; padding:6px 8px; }
+    .error { color: #b00020; margin-top: 10px; }
+    .hint { color:#444; font-size:0.9rem; margin-bottom:10px;}
+  </style>
+</head>
+<body>
+
+  <h1>Simple Message Board</h1>
+  <p class="hint">This page talks to <code>http://localhost:5000/api/messages</code>. Make sure your Express server is running.</p>
+
+  <form id="messageForm">
+    <input id="name" type="text" placeholder="Your name" required />
+    <input id="text" type="text" placeholder="Your message" required />
+    <button type="submit">Send</button>
+  </form>
+
+  <div style="display:flex; gap:8px; margin-bottom:12px;">
+    <button id="refreshBtn" class="secondary">Refresh</button>
+    <button id="clearBtn" class="secondary">Clear local list</button>
+  </div>
+
+  <div id="status" class="hint"></div>
+  <div id="error" class="error" style="display:none"></div>
+
+  <ul id="messagesList" aria-live="polite"></ul>
+
+  <script>
+    // Configuration
+    const API_BASE = 'http://localhost:5000';
+    const LIST_ENDPOINT = API_BASE + '/api/messages';
+
+    // Elements
+    const form = document.getElementById('messageForm');
+    const nameInput = document.getElementById('name');
+    const textInput = document.getElementById('text');
+    const messagesList = document.getElementById('messagesList');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const status = document.getElementById('status');
+    const errorBox = document.getElementById('error');
+
+    // Helper: show error
+    function showError(msg) {
+      errorBox.style.display = 'block';
+      errorBox.textContent = msg;
+      setTimeout(() => {
+        errorBox.style.display = 'none';
+      }, 4000);
+    }
+
+    // Helper: create DOM for a message
+    function renderMessage(item) {
+      const li = document.createElement('li');
+
+      const left = document.createElement('div');
+      left.className = 'left';
+      const title = document.createElement('div');
+      title.innerHTML = '<strong>' + escapeHtml(item.name || 'Unknown') + '</strong>';
+      const txt = document.createElement('div');
+      txt.className = 'msg-text';
+      txt.textContent = item.text || '';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = item.time ? 'Posted: ' + item.time : (item.createdAt ? 'Posted: ' + new Date(item.createdAt).toLocaleString() : '');
+
+      left.appendChild(title);
+      left.appendChild(txt);
+      left.appendChild(meta);
+
+      const controls = document.createElement('div');
+      controls.className = 'controls';
+
+      const del = document.createElement('button');
+      del.className = 'small';
+      del.textContent = 'Delete';
+      del.addEventListener('click', () => deleteMessage(item.id || item._id));
+
+      controls.appendChild(del);
+
+      li.appendChild(left);
+      li.appendChild(controls);
+
+      return li;
+    }
+
+    // Escape HTML to prevent injection in displayed text
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    // Fetch messages (GET)
+    async function fetchMessages() {
+      status.textContent = 'Loading messages...';
+      try {
+        const res = await fetch(LIST_ENDPOINT);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to fetch');
+        renderList(data.items || data || []);
+        status.textContent = 'Messages loaded.';
+      } catch (err) {
+        status.textContent = '';
+        showError('Could not load messages — is the server running?');
+        console.error(err);
+      }
+    }
+
+    // Render list to DOM
+    function renderList(items) {
+      messagesList.innerHTML = '';
+      if (!items.length) {
+        const empty = document.createElement('li');
+        empty.textContent = 'No messages yet — be the first!';
+        messagesList.appendChild(empty);
+        return;
+      }
+      for (const it of items) {
+        messagesList.appendChild(renderMessage(it));
+      }
+    }
+
+    // Create message (POST)
+    async function postMessage(payload) {
+      try {
+        const res = await fetch(LIST_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to post message');
+        // add returned item to top of list
+        const current = messagesList.querySelectorAll('li');
+        // fetch again to ensure consistent list
+        await fetchMessages();
+        status.textContent = 'Message posted.';
+      } catch (err) {
+        showError('Failed to send message.');
+        console.error(err);
+      }
+    }
+
+    // Delete message (DELETE)
+    async function deleteMessage(id) {
+      if (!confirm('Delete this message?')) return;
+      try {
+        const res = await fetch(LIST_ENDPOINT + '/' + encodeURIComponent(id), {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Delete failed');
+        // refresh list
+        await fetchMessages();
+        status.textContent = 'Message deleted.';
+      } catch (err) {
+        showError('Failed to delete message.');
+        console.error(err);
+      }
+    }
+
+    // Form submit handler
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = nameInput.value.trim();
+      const text = textInput.value.trim();
+      if (!name || !text) {
+        showError('Please enter both name and message.');
+        return;
+      }
+      // Simple payload
+      const payload = { name, text };
+      await postMessage(payload);
+      nameInput.value = '';
+      textInput.value = '';
+    });
+
+    // Refresh button
+    refreshBtn.addEventListener('click', fetchMessages);
+
+    // Clear list locally (does not affect server)
+    clearBtn.addEventListener('click', () => {
+      messagesList.innerHTML = '';
+      status.textContent = 'Local list cleared. Click Refresh to re-load from server.';
+    });
+
+    // Initial load
+    fetchMessages();
+  </script>
+
+</body>
+</html>
