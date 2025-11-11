@@ -1,0 +1,12 @@
+{
+  "name": "simple-task-manager",
+  "version": "1.0.0",
+  "description": "Full-stack task manager (Express + static HTML/CSS/JS) with JSON file storage",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
