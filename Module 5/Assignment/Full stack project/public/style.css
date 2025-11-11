@@ -1,9 +1,0 @@
-body{font-family:sans-serif;background:#f8f9fa;margin:0;padding:20px;}
-.app{max-width:800px;margin:auto;background:#fff;padding:20px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}
-h1{text-align:center;}
-#tasks{list-style:none;padding:0;}
-.task{display:flex;justify-content:space-between;align-items:flex-start;border:1px solid #ddd;padding:10px;margin-bottom:10px;border-radius:6px;}
-.completed h3{text-decoration:line-through;color:gray;}
-.btn{padding:6px 10px;border:none;border-radius:4px;cursor:pointer;}
-.btn.primary{background:#007bff;color:#fff;}
-.small-btn{background:#eee;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;}
